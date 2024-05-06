@@ -1,94 +1,47 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 void main() {
-  runApp(SentimentAnalysisApp());
+  runApp(MyApp());
 }
 
-class SentimentAnalysisApp extends StatelessWidget {
+class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sentiment Analysis',
+      title: 'API Integration App',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: HomeScreen(),
+      home: MyHomePage(),
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
+class MyHomePage extends StatefulWidget {
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _controller = TextEditingController();
+class _MyHomePageState extends State<MyHomePage> {
+  TextEditingController _controller = TextEditingController();
+  String _sentimentResult = '';
+  String _topicResult = '';
   bool _isLoading = false;
 
-  Future<Map<String, dynamic>> analyzeSentiment(String review) async {
-    final String apiUrl =
-        "https://asia-south1-final-year-sentiscope.cloudfunctions.net/sentiscope-1";
-    final response = await http.post(
-      Uri.parse(apiUrl),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({"review": review}),
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load analysis');
-    }
-  }
-
-  void _handleAnalysis() async {
-    if (_controller.text.isEmpty) {
-      _showDialog('Error', 'Please enter text for analysis.');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final Map<String, dynamic> result =
-          await analyzeSentiment(_controller.text);
-      setState(() {
-        _isLoading = false;
-      });
-      _showDialog(
-          'Analysis Result',
-          'Sentiment: ${result['sentiment']}\n'
-              'Probabilities:\n'
-              'Negative: ${result['probabilities']['Negative']}%\n'
-              'Neutral: ${result['probabilities']['Neutral']}%\n'
-              'Positive: ${result['probabilities']['Positive']}%');
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showDialog('Error', 'Failed to analyze sentiment. Please try again.');
-    }
-  }
-
-  void _showDialog(String title, String content) {
+  void _showErrorDialog(String message) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
+      builder: (ctx) => AlertDialog(
+        title: Text('Error'),
+        content: Text(message),
         actions: <Widget>[
           TextButton(
-            child: Text('OK'),
+            child: Text('Okay'),
             onPressed: () {
-              Navigator.of(context).pop();
+              Navigator.of(ctx).pop();
             },
           ),
         ],
@@ -96,33 +49,113 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _performSentimentAnalysis() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      var response = await http.post(
+        Uri.parse(
+            'https://us-central1-eloquent-clover-417510.cloudfunctions.net/predictsent'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, String>{
+          'text': _controller.text,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        setState(() {
+          _sentimentResult = data['Prediction'];
+        });
+      } else {
+        _showErrorDialog('Failed to get sentiment analysis.');
+      }
+    } catch (e) {
+      _showErrorDialog('Error occurred while trying to send data.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _performTopicModeling() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      var response = await http.post(
+        Uri.parse(
+            'https://asia-south2-eloquent-clover-417510.cloudfunctions.net/Topic'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, String>{
+          'review_text': _controller.text,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        setState(() {
+          _topicResult = data['topic'];
+        });
+      } else {
+        _showErrorDialog('Failed to get topic analysis.');
+      }
+    } catch (e) {
+      _showErrorDialog('Error occurred while trying to send data.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sentiment Analysis'),
+        title: Text('Text Analysis App'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TextField(
-              controller: _controller,
-              decoration: InputDecoration(
-                hintText: 'Enter text for analysis',
-                border: OutlineInputBorder(),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              TextField(
+                controller: _controller,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter text here',
+                ),
+                minLines: 1,
+                maxLines: 5,
               ),
-              maxLines: 4,
-            ),
-            SizedBox(height: 20),
-            _isLoading
-                ? CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _handleAnalysis,
-                    child: Text('Analyze Sentiment'),
-                  ),
-          ],
+              SizedBox(height: 20),
+              if (_isLoading)
+                CircularProgressIndicator()
+              else ...[
+                ElevatedButton(
+                  onPressed: _performSentimentAnalysis,
+                  child: Text('Analyze Sentiment'),
+                ),
+                SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: _performTopicModeling,
+                  child: Text('Analyze Topic'),
+                ),
+              ],
+              SizedBox(height: 20),
+              Text('Sentiment Result: $_sentimentResult'),
+              SizedBox(height: 10),
+              Text('Topic Result: $_topicResult'),
+            ],
+          ),
         ),
       ),
     );

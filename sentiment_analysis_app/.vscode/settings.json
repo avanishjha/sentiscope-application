@@ -1,3 +1,4 @@
 {
-  "cmake.sourceDirectory": "D:/Final Year Project/sentiment_analysis_app/linux/flutter"
+  "cmake.sourceDirectory": "D:/Final Year Project/sentiment_analysis_app/linux/flutter",
+  "java.configuration.updateBuildConfiguration": "interactive"
 }
